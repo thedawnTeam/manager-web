@@ -49,7 +49,7 @@
           <Button type="primary" size="small" style="margin-right: 5px" @click="queryOrder(row, true)">查询订单</Button>
           <Button type="success" size="small" style="margin-right: 5px" @click="queryOrderExpress(row, true)">查询物流</Button>
           <Button type="primary" size="small" style="margin-right: 5px" @click="showExpress(row.logisticsDetails)">显示物流</Button>
-          <Button type="success" size="small" style="margin-right: 5px" @click="relogin(row)">重新登录</Button>
+          <Button type="success" size="small" style="margin-right: 5px" @click="reLoginMethod(row)">重新登录</Button>
         </template>
       </Table>
       <Page :total="total" :page-size="pageSize" :current="currentPage" @on-change="pageSizeChangeHandler" show-elevator show-total/>
@@ -82,7 +82,7 @@
   </div>
 </template>
 <script>
-import { queryAccountPage, queryOrderById, queryOrderExpressById } from '@/api/data'
+import { queryAccountPage, queryOrderById, queryOrderExpressById, reLogin } from '@/api/data'
 import { Table, Page } from 'iview'
 
 export default {
@@ -324,8 +324,14 @@ export default {
         this.$Message.warning('手机号: ' + data.phone + ' 请先查询订单数据')
       }
     },
-    relogin() {
-
+    reLoginMethod (item) {
+      if (item.status !== -1) {
+        this.$Message.warning('此账号无需重新登陆')
+        return
+      }
+      reLogin(item.id).then(res => {
+        console.log(res)
+      })
     },
     cancelDialog () {
       this.dialog.isShowDialog = false

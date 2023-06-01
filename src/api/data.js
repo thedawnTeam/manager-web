@@ -30,9 +30,9 @@ export const queryLuckyPerson = (pageNum, pageSize, searchStr) => {
   })
 }
 
-export const getDragList = () => {
+export const reLogin = (id) => {
   return axios.request({
-    url: 'get_drag_list',
+    url: '/reLogin?id=' + id,
     method: 'get'
   })
 }
