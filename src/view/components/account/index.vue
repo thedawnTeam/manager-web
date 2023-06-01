@@ -42,11 +42,28 @@
       </Table>
       <Page :total="total" :page-size="pageSize" :current="currentPage" @on-change="pageSizeChangeHandler" show-elevator show-total/>
     </Card>
+
     <Modal
-      v-model="isShowDialog"
-      title="订单详情">
+      v-model="dialog.isShowDialog"
+      :title="dialog.title">
       <div>
-        <pre>{{ dialogContent ? JSON.stringify(dialogContent, null, 2) : 'Invalid JSON' }}</pre>
+        <h3>{{ dialog.dialogContent}}</h3>
+        <div v-show="dialog.showOrder">
+          <p>订单数量：{{ dialog.order.total }}</p>
+          <p>订单ID：{{ dialog.order.orderId }}</p>
+          <p>当前状态：{{ dialog.order.statusName }}</p>
+          <p>产品名称：{{ dialog.order.sellerName }}</p>
+          <p>收货人：{{ dialog.order.receiverName }}</p>
+          <p>收货手机：{{ dialog.order.receiverPhone }}</p>
+        </div>
+        <div v-show="dialog.showExpress">
+          <p>订单ID：{{ dialog.express.primaryOrderId }}</p>
+          <p>物流公司：{{ dialog.express.deliveryCompany }}</p>
+          <p>物流单号：{{ dialog.express.deliveryId }}</p>
+          <p>物流状态：{{ dialog.express.deliveryStatusName }}</p>
+          <p>更新时间：{{ dialog.express.processTime }}</p>
+          <p>最新流程：{{ dialog.express.processDesc }}</p>
+        </div>
       </div>
     </Modal>
   </div>
@@ -133,8 +150,30 @@ export default {
           label: 'Token失效'
         }
       ],
-      isShowDialog: false, // 是否显示弹出框
-      dialogContent: ''
+      dialog: {
+        isShowDialog: false, // 是否显示弹出框
+        title: '弹出框',
+        dialogContent: '',
+        showOrder: false,
+        showExpress: false,
+        order: {
+          total: '',
+          orderId: '',
+          statusName: '',
+          sellerName: '',
+          receiverName: '',
+          receiverPhone: ''
+        },
+        express: {
+          deliveryCompany: '',
+          primaryOrderId: '',
+          deliveryStatusName: '',
+          deliveryId: '',
+          processDesc: '',
+          originalLogisticsStatusDesc: '',
+          processTime: ''
+        }
+      }
     }
   },
   methods: {
@@ -159,36 +198,49 @@ export default {
       this.getTableData()
     },
     showOrder (index) {
-      console.log(this.data[index])
+      this.$Spin.show()
       queryOrderById(this.data[index].id).then(res => {
-        this.isShowDialog = true
+        this.$Spin.hide()
+        this.dialog.isShowDialog = true
+        this.dialog.title = '订单详情'
         let retJson = JSON.parse(res.data.data)
         if (retJson.data.total !== 0) {
           this.data[index].status = 1
-          this.dialogContent = `<Button type="default" ghost>Default</Button>`
+          this.dialog.showOrder = true
+          let list = retJson.data.list[0]
+          this.dialog.dialogContent = ''
+          this.dialog.order.total = retJson.data.total
+          this.dialog.order.orderId = list.orderId
+          this.dialog.order.statusName = list.orderStatusName
+          this.dialog.order.sellerName = list.sellerName
+          this.dialog.order.receiverName = list.receiverName
+          this.dialog.order.receiverPhone = list.receiverPhone
+          console.log(this.dialog)
         } else {
-          this.dialogContent = '未查询到订单'
+          this.dialog.dialogContent = '未查询到订单'
         }
         console.log(retJson)
       })
     },
     showExpress (index) {
-      console.log(this.data[index])
-      if (this.data[index].status === 1) {
-        queryOrderExpressById(this.data[index].id).then(res => {
-          this.isShowDialog = true
-          let retJson = JSON.parse(res.data.data)
-          if (retJson.data.total !== 0) {
-            this.orderDesc = retJson.data.list
-            this.dialogContent = res.data
-          } else {
-            this.dialogContent = '未查询到物流'
-          }
-          console.log(retJson)
-        })
-      } else {
-        this.$Message.warning('请先查询订单')
-      }
+      this.$Spin.show()
+      queryOrderExpressById(this.data[index].id).then(res => {
+        this.$Spin.hide()
+        this.dialog.isShowDialog = true
+        this.dialog.title = '物流详情'
+        let retJson = JSON.parse(res.data.data)
+        let list = retJson.data[0][0]
+        this.dialog.showExpress = true
+        this.dialog.dialogContent = ''
+        this.dialog.express.primaryOrderId = list.primaryOrderId
+        this.dialog.express.deliveryCompany = list.deliveryCompany
+        this.dialog.express.deliveryId = list.deliveryId
+        this.dialog.express.deliveryStatusName = list.deliveryStatusName
+        this.dialog.express.processDesc = list.logisticsAttr.processDesc
+        this.dialog.express.processTime = list.logisticsAttr.processTime
+        console.log(this.dialog)
+        console.log(retJson)
+      })
     }
   },
   mounted () {
