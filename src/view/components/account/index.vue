@@ -33,11 +33,23 @@
         <FormItem>
           <Button type="primary" @click="getTableData()">搜索</Button>
         </FormItem>
+        <FormItem>
+          <Button type="primary" @click="queryOrderBatch()">批量查询订单</Button>
+        </FormItem>
+        <FormItem>
+          <Button type="primary" @click="queryExpressBatch()">批量查询物流</Button>
+        </FormItem>
       </Form>
-      <Table :columns="columns" :data="data" :highlight-row="true">
+      <div style="margin-bottom: 8px">
+        <Button @click="handleSelectAll(true)">全选</Button>
+        <Button @click="handleSelectAll(false)">取消全选</Button>
+      </div>
+      <Table ref="selection" :columns="columns" :data="data" :highlight-row="true">
         <template #action="{ row, index }">
-          <Button type="primary" size="small" style="margin-right: 5px" @click="showOrder(index)">查询订单</Button>
-          <Button type="success" size="small" style="margin-right: 5px" @click="showExpress(index)">查询物流</Button>
+          <Button type="primary" size="small" style="margin-right: 5px" @click="queryOrder(row, true)">查询订单</Button>
+          <Button type="success" size="small" style="margin-right: 5px" @click="queryOrderExpress(row, true)">查询物流</Button>
+          <Button type="primary" size="small" style="margin-right: 5px" @click="showExpress(row.logisticsDetails)">显示物流</Button>
+          <Button type="success" size="small" style="margin-right: 5px" @click="relogin(row)">重新登录</Button>
         </template>
       </Table>
       <Page :total="total" :page-size="pageSize" :current="currentPage" @on-change="pageSizeChangeHandler" show-elevator show-total/>
@@ -45,7 +57,8 @@
 
     <Modal
       v-model="dialog.isShowDialog"
-      :title="dialog.title">
+      :title="dialog.title"
+      @on-cancel="cancelDialog">
       <div>
         <h3>{{ dialog.dialogContent}}</h3>
         <div v-show="dialog.showOrder">
@@ -81,11 +94,17 @@ export default {
   data () {
     return {
       columns: [
+        {
+          type: 'selection',
+          width: 60,
+          align: 'center'
+        },
         { title: 'id', key: 'id', width: 80 },
         { title: '手机号', key: 'phone' },
         {
           title: '创建时间',
           key: 'createdAt',
+          width: 150,
           render: function (h, params) {
             return <span>{ new Date(params.row.createdAt).toLocaleDateString() + ' ' + new Date(params.row.createdAt).toLocaleTimeString() }</span>
           }
@@ -121,7 +140,37 @@ export default {
           }
         },
         { title: '备注', key: 'remark' },
-        { title: '操作', slot: 'action' }
+        {
+          title: '订单消息',
+          key: 'orderDetail',
+          render: (h, params) => {
+            let text = '无订单消息'
+            if (params.row.orderDetail != null) {
+              let retJson = JSON.parse(params.row.orderDetail)
+              if (retJson.data.list.length > 0) {
+                text = retJson.data.list[0].orderId
+              }
+            }
+            return <span>{text}</span>
+          }
+        },
+        {
+          title: '物流消息',
+          key: 'logisticsDetails',
+          render: (h, params) => {
+            let text = '无物流消息'
+            if (params.row.logisticsDetails != null) {
+              let retJson = JSON.parse(params.row.logisticsDetails)
+              if (retJson.data.length > 0) {
+                text = retJson.data[0][0].deliveryStatusName
+              } else {
+                text = '待发货'
+              }
+            }
+            return <span>{text}</span>
+          }
+        },
+        { title: '操作', slot: 'action', width: 350 }
       ],
       data: [],
       total: 0,
@@ -197,50 +246,105 @@ export default {
       this.currentPage = current
       this.getTableData()
     },
-    showOrder (index) {
-      this.$Spin.show()
-      queryOrderById(this.data[index].id).then(res => {
-        this.$Spin.hide()
-        this.dialog.isShowDialog = true
-        this.dialog.title = '订单详情'
-        let retJson = JSON.parse(res.data.data)
-        if (retJson.data.total !== 0) {
-          this.data[index].status = 1
-          this.dialog.showOrder = true
-          let list = retJson.data.list[0]
-          this.dialog.dialogContent = ''
-          this.dialog.order.total = retJson.data.total
-          this.dialog.order.orderId = list.orderId
-          this.dialog.order.statusName = list.orderStatusName
-          this.dialog.order.sellerName = list.sellerName
-          this.dialog.order.receiverName = list.receiverName
-          this.dialog.order.receiverPhone = list.receiverPhone
-          console.log(this.dialog)
-        } else {
-          this.dialog.dialogContent = '未查询到订单'
+    queryOrder (item, show = false) {
+      queryOrderById(item.id).then(res => {
+        item.orderDetail = res.data.data
+        if (show) {
+          this.dialog.isShowDialog = true
+          this.dialog.title = '订单详情'
+          let retJson = JSON.parse(res.data.data)
+          if (retJson.data.total !== 0) {
+            item.status = 1
+            this.dialog.showOrder = true
+            let list = retJson.data.list[0]
+            this.dialog.dialogContent = ''
+            this.dialog.order.total = retJson.data.total
+            this.dialog.order.orderId = list.orderId
+            this.dialog.order.statusName = list.orderStatusName
+            this.dialog.order.sellerName = list.sellerName
+            this.dialog.order.receiverName = list.receiverName
+            this.dialog.order.receiverPhone = list.receiverPhone
+            console.log(this.dialog)
+          } else {
+            item.status = 0
+            this.dialog.dialogContent = '未查询到订单'
+            this.getTableData()
+          }
         }
-        console.log(retJson)
       })
     },
-    showExpress (index) {
-      this.$Spin.show()
-      queryOrderExpressById(this.data[index].id).then(res => {
-        this.$Spin.hide()
-        this.dialog.isShowDialog = true
-        this.dialog.title = '物流详情'
-        let retJson = JSON.parse(res.data.data)
-        let list = retJson.data[0][0]
-        this.dialog.showExpress = true
-        this.dialog.dialogContent = ''
-        this.dialog.express.primaryOrderId = list.primaryOrderId
-        this.dialog.express.deliveryCompany = list.deliveryCompany
-        this.dialog.express.deliveryId = list.deliveryId
-        this.dialog.express.deliveryStatusName = list.deliveryStatusName
-        this.dialog.express.processDesc = list.logisticsAttr.processDesc
-        this.dialog.express.processTime = list.logisticsAttr.processTime
-        console.log(this.dialog)
-        console.log(retJson)
-      })
+    queryOrderBatch () {
+      let selectItems = this.$refs.selection.getSelection()
+      console.log(selectItems)
+      for (const item in selectItems) {
+        this.queryOrder(selectItems[item])
+      }
+    },
+    queryExpressBatch () {
+      let selectItems = this.$refs.selection.getSelection()
+      for (const item in selectItems) {
+        this.queryOrderExpress(selectItems[item])
+      }
+    },
+    handleSelectAll (status) {
+      this.$refs.selection.selectAll(status)
+    },
+    showExpress (data) {
+      if (data == null) {
+        this.$Message.warning('无物流消息')
+        return
+      }
+      this.dialog.isShowDialog = true
+      this.dialog.title = '物流详情'
+      let retJson = JSON.parse(data)
+      if (!retJson.data.length > 0) {
+        this.dialog.dialogContent = '待发货'
+        return
+      }
+      let list = retJson.data[0][0]
+      this.dialog.showExpress = true
+      this.dialog.express.primaryOrderId = list.primaryOrderId
+      this.dialog.express.deliveryCompany = list.deliveryCompany
+      this.dialog.express.deliveryId = list.deliveryId
+      this.dialog.express.deliveryStatusName = list.deliveryStatusName
+      this.dialog.express.processDesc = list.logisticsAttr.processDesc
+      this.dialog.express.processTime = list.logisticsAttr.processTime
+    },
+    queryOrderExpress (item, show = false) {
+      console.log(item)
+      let data = item
+      if (data.status === 1 && data.orderDetail != null) {
+        queryOrderExpressById(data.id).then(res => {
+          data.logisticsDetails = res.data.data
+          if (show) {
+            this.showExpress(res.data.data)
+          }
+        })
+      } else {
+        this.$Message.warning('手机号: ' + data.phone + ' 请先查询订单数据')
+      }
+    },
+    relogin() {
+
+    },
+    cancelDialog () {
+      this.dialog.isShowDialog = false
+      this.dialog.dialogContent = ''
+      this.dialog.showExpress = false
+      this.dialog.showOrder = false
+      this.dialog.order.total = ''
+      this.dialog.order.orderId = ''
+      this.dialog.order.statusName = ''
+      this.dialog.order.sellerName = ''
+      this.dialog.order.receiverName = ''
+      this.dialog.order.receiverPhone = ''
+      this.dialog.express.deliveryCompany = ''
+      this.dialog.express.primaryOrderId = ''
+      this.dialog.express.deliveryStatusName = ''
+      this.dialog.express.deliveryId = ''
+      this.dialog.express.processDesc = ''
+      this.dialog.express.originalLogisticsStatusDesc = ''
+      this.dialog.express.processTime = ''
     }
   },
   mounted () {
