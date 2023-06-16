@@ -18,19 +18,19 @@
           <fullscreen v-model="isFullscreen" style="margin-right: 10px;"/>
         </header-bar>
       </Header>
-      <Content class="main-content-con">
+      <Row class="main-content-con">
         <Layout class="main-layout-con">
           <div class="tag-nav-wrapper">
             <tags-nav :value="$route" @input="handleClick" :list="tagNavList" @on-close="handleCloseTag"/>
           </div>
-          <Content class="content-wrapper">
+          <Row class="content-wrapper">
             <keep-alive :include="cacheList">
               <router-view/>
             </keep-alive>
             <ABackTop :height="100" :bottom="80" :right="50" container=".content-wrapper"></ABackTop>
-          </Content>
+          </Row>
         </Layout>
-      </Content>
+      </Row>
     </Layout>
   </Layout>
 </template>

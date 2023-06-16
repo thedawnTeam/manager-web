@@ -121,7 +121,31 @@ export default {
           title: '平台',
           key: 'channelId',
           render: (h, params) => {
-            return <span>{ params.row.channelId === 7 ? '贵旅优品' : '新联惠购' }</span>
+            let channelText = ''
+            switch (params.row.channelId) {
+              case 2:
+                channelText = '空港乐购'
+                break
+              case 3:
+                channelText = '贵盐黔品'
+                break
+              case 4:
+                channelText = '乐旅商城'
+                break
+              case 5:
+                channelText = '遵航出山'
+                break
+              case 6:
+                channelText = '航旅黔购'
+                break
+              case 7:
+                channelText = '贵旅优品'
+                break
+              case 8:
+                channelText = '新联惠购'
+                break
+            }
+            return <span>{ channelText }</span>
           }
         },
         {
@@ -139,15 +163,20 @@ export default {
             return <span>{ statusText }</span>
           }
         },
+        {
+          title: '预约时间',
+          key: 'appointmentTime'
+        },
         { title: '备注', key: 'remark' },
         {
           title: '订单消息',
           key: 'orderDetail',
+          width: 150,
           render: (h, params) => {
             let text = '无订单消息'
             if (params.row.orderDetail != null) {
               let retJson = JSON.parse(params.row.orderDetail)
-              if (retJson.data.list.length > 0) {
+              if (retJson.code === '10000' && retJson.data.list.length > 0) {
                 text = retJson.data.list[0].orderId
               }
             }
@@ -237,7 +266,6 @@ export default {
         searchStr += 'status=' + this.formInline.currentStatus + ';'
       }
       queryAccountPage(this.currentPage, this.pageSize, searchStr).then(res => {
-        console.log(res.data)
         this.data = res.data.data.records
         this.total = res.data.data.total
       })
@@ -248,11 +276,19 @@ export default {
     },
     queryOrder (item, show = false) {
       queryOrderById(item.id).then(res => {
-        item.orderDetail = res.data.data
+        if (res.data.code !== 200) {
+          this.$Message.warning(res.data.data)
+          return
+        }
         if (show) {
+          let retJson = JSON.parse(res.data.data)
+          if (retJson.code !== '10000') {
+            this.$Message.warning(retJson.message)
+            return
+          }
+          item.orderDetail = res.data.data
           this.dialog.isShowDialog = true
           this.dialog.title = '订单详情'
-          let retJson = JSON.parse(res.data.data)
           if (retJson.data.total !== 0) {
             item.status = 1
             this.dialog.showOrder = true
@@ -271,6 +307,9 @@ export default {
             this.getTableData()
           }
         }
+      }).catch((err) => {
+        console.log(err)
+        this.$Message.warning('查询失败')
       })
     },
     queryOrderBatch () {
@@ -319,6 +358,9 @@ export default {
           if (show) {
             this.showExpress(res.data.data)
           }
+        }).catch((err) => {
+          console.log(err)
+          this.$Message.warning('查询失败')
         })
       } else {
         this.$Message.warning('手机号: ' + data.phone + ' 请先查询订单数据')

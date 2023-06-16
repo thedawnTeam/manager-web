@@ -8,9 +8,9 @@ class HttpRequest {
   getInsideConfig () {
     const config = {
       baseURL: this.baseUrl,
-      timeout: 5000,
       headers: {
-      }
+      },
+      timeout: 3000
     }
     return config
   }
@@ -37,9 +37,6 @@ class HttpRequest {
       this.destroy(url)
       const { data, status } = res
       return { data, status }
-    }, error => {
-      this.destroy(url)
-      return Promise.reject(error)
     })
   }
   request (options) {
