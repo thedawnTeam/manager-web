@@ -116,34 +116,5 @@ export default [
         component: () => import('@/view/components/win/index.vue')
       }
     ]
-  },
-  {
-    path: '/components',
-    name: '快递物流',
-    meta: {
-      icon: 'logo-buffer',
-      title: '快递'
-    },
-    component: Main,
-    children: [
-      {
-        path: 'tree_table_page',
-        name: 'sf快递查询',
-        meta: {
-          icon: 'md-git-branch',
-          title: 'sf快递查询'
-        },
-        component: () => import('@/view/components/account/index.vue')
-      },
-      {
-        path: 'order',
-        name: 'order_query',
-        meta: {
-          icon: 'md-git-branch',
-          title: '物流查询'
-        },
-        component: () => import('@/view/components/order/index.vue')
-      }
-    ]
   }
 ]
