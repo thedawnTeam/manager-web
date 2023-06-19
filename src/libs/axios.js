@@ -9,8 +9,7 @@ class HttpRequest {
     const config = {
       baseURL: this.baseUrl,
       headers: {
-      },
-      timeout: 3000
+      }
     }
     return config
   }

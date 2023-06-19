@@ -25,10 +25,15 @@
             </template>
           </Input>
         </FormItem>
-        <FormItem prop="cardNumber">
+        <FormItem prop="status">
           <Select v-model="formInline.currentStatus" style="width:200px" placeholder="状态">
             <Option v-for="item in statusList" :value="item.value" :key="item.value">{{ item.label }}</Option>
           </Select>
+        </FormItem>
+        <FormItem>
+        <FormItem prop="appointmentTime">
+            <DatePicker type="date" placeholder="预约时间" v-model="formInline.appointmentTime"></DatePicker>
+        </FormItem>
         </FormItem>
         <FormItem>
           <Button type="primary" @click="getTableData()">搜索</Button>
@@ -38,6 +43,9 @@
         </FormItem>
         <FormItem>
           <Button type="primary" @click="queryExpressBatch()">批量查询物流</Button>
+        </FormItem>
+        <FormItem>
+          <Button type="primary" @click="reLoginBatch()">批量重新登陆</Button>
         </FormItem>
       </Form>
       <div style="margin-bottom: 8px">
@@ -49,7 +57,7 @@
           <Button type="primary" size="small" style="margin-right: 5px" @click="queryOrder(row, true)">查询订单</Button>
           <Button type="success" size="small" style="margin-right: 5px" @click="queryOrderExpress(row, true)">查询物流</Button>
           <Button type="primary" size="small" style="margin-right: 5px" @click="showExpress(row.logisticsDetails)">显示物流</Button>
-          <Button type="success" size="small" style="margin-right: 5px" @click="reLoginMethod(row)">重新登录</Button>
+          <Button type="success" size="small" style="margin-right: 5px" @click="reLoginMethod(row)" :disabled="requesting">重新登录</Button>
         </template>
       </Table>
       <Page :total="total" :page-size="pageSize" :current="currentPage" @on-change="pageSizeChangeHandler" show-elevator show-total/>
@@ -208,7 +216,8 @@ export default {
       formInline: {
         phone: '',
         realName: '',
-        currentStatus: ''
+        currentStatus: '',
+        appointmentTime: ''
       },
       statusList: [
         {
@@ -251,7 +260,8 @@ export default {
           originalLogisticsStatusDesc: '',
           processTime: ''
         }
-      }
+      },
+      requesting: false
     }
   },
   methods: {
@@ -265,6 +275,13 @@ export default {
       if (this.formInline.currentStatus && this.formInline.currentStatus !== '') {
         searchStr += 'status=' + this.formInline.currentStatus + ';'
       }
+      if (this.formInline.appointmentTime && this.formInline.appointmentTime !== '') {
+        let formatter = new Intl.DateTimeFormat('zh-cn', { year: 'numeric', month: '2-digit', day: '2-digit' })
+        let formattedDate = formatter.format(new Date(this.formInline.appointmentTime))
+        let appointmentTime = formattedDate.replaceAll('/', '-')
+        searchStr += 'appointment_time=' + appointmentTime + ';'
+        console.log(appointmentTime)
+      }
       queryAccountPage(this.currentPage, this.pageSize, searchStr).then(res => {
         this.data = res.data.data.records
         this.total = res.data.data.total
@@ -275,18 +292,21 @@ export default {
       this.getTableData()
     },
     queryOrder (item, show = false) {
+      let self = this
       queryOrderById(item.id).then(res => {
+        console.log(res)
         if (res.data.code !== 200) {
           this.$Message.warning(res.data.data)
           return
         }
+        let retJson = JSON.parse(res.data.data)
+        if (retJson.code !== '10000') {
+          this.$Message.warning(retJson.message)
+          return
+        }
+        const index = self.data.findIndex(d => d.id === parseInt(res.data.id))
+        self.data[index].orderDetail = res.data.data
         if (show) {
-          let retJson = JSON.parse(res.data.data)
-          if (retJson.code !== '10000') {
-            this.$Message.warning(retJson.message)
-            return
-          }
-          item.orderDetail = res.data.data
           this.dialog.isShowDialog = true
           this.dialog.title = '订单详情'
           if (retJson.data.total !== 0) {
@@ -300,12 +320,12 @@ export default {
             this.dialog.order.sellerName = list.sellerName
             this.dialog.order.receiverName = list.receiverName
             this.dialog.order.receiverPhone = list.receiverPhone
-            console.log(this.dialog)
           } else {
             item.status = 0
             this.dialog.dialogContent = '未查询到订单'
-            this.getTableData()
           }
+        } else {
+          this.$Message.success(item.phone + '查询成功')
         }
       }).catch((err) => {
         console.log(err)
@@ -314,16 +334,41 @@ export default {
     },
     queryOrderBatch () {
       let selectItems = this.$refs.selection.getSelection()
+      if (selectItems.length <= 0) {
+        this.$Message.warning('请先选中需要查询的账号')
+      }
       console.log(selectItems)
-      for (const item in selectItems) {
-        this.queryOrder(selectItems[item])
+      for (const index in selectItems) {
+        this.queryOrder(selectItems[index])
       }
     },
     queryExpressBatch () {
       let selectItems = this.$refs.selection.getSelection()
-      for (const item in selectItems) {
-        this.queryOrderExpress(selectItems[item])
+      if (selectItems.length <= 0) {
+        this.$Message.warning('请先选中需要查询的账号')
       }
+      for (const index in selectItems) {
+        this.queryOrderExpress(selectItems[index])
+      }
+    },
+    reLoginBatch () {
+      if (this.requesting) {
+        return
+      }
+      this.requesting = true
+      console.log(this.requesting)
+      let selectItems = this.$refs.selection.getSelection()
+      if (selectItems.length <= 0) {
+        this.$Message.warning('请先选中需要查询的账号')
+      }
+      try {
+        for (const index in selectItems) {
+          this.reLoginMethod(selectItems[index])
+        }
+      } catch (e) {
+        console.log(e)
+      }
+      this.requesting = false
     },
     handleSelectAll (status) {
       this.$refs.selection.selectAll(status)
@@ -352,11 +397,15 @@ export default {
     queryOrderExpress (item, show = false) {
       console.log(item)
       let data = item
+      let self = this
       if (data.status === 1 && data.orderDetail != null) {
         queryOrderExpressById(data.id).then(res => {
-          data.logisticsDetails = res.data.data
+          const index = self.data.findIndex(d => d.id === parseInt(res.data.id))
+          self.data[index].logisticsDetails = res.data.data
           if (show) {
             this.showExpress(res.data.data)
+          } else {
+            this.$Message.success('查询物流成功，已显示状态')
           }
         }).catch((err) => {
           console.log(err)
@@ -371,7 +420,16 @@ export default {
         this.$Message.warning('此账号无需重新登陆')
         return
       }
+      let self = this
       reLogin(item.id).then(res => {
+        if (res.data.code === 200) {
+          let returnJson = JSON.parse(res.data.data.body)
+          this.$Message.info(returnJson['msg'])
+          const index = self.data.findIndex(d => d.id === parseInt(res.data.id))
+          self.data[index].status = 0
+        } else {
+          this.$Message.error('发生错误')
+        }
         console.log(res)
       })
     },
