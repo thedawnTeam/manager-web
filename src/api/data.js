@@ -30,6 +30,15 @@ export const queryLuckyPerson = (pageNum, pageSize, searchStr) => {
   })
 }
 
+export const queryExportAccount = (winningTime) => {
+  console.log('预约日期=' + winningTime)
+  return axios.request({
+    url: '/queryExportAccount?winningTime=' + winningTime,
+    method: 'get',
+    responseType: 'blob'
+  })
+}
+
 export const reLogin = (id) => {
   return axios.request({
     url: '/reLogin?id=' + id,

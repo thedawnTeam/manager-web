@@ -18,22 +18,16 @@
             </template>
           </Input>
         </FormItem>
-        <FormItem prop="cardNumber">
-          <Input type="text" placeholder="身份证">
-            <template #prepend>
-              <Icon type="md-card" />
-            </template>
-          </Input>
-        </FormItem>
         <FormItem prop="status">
           <Select v-model="formInline.currentStatus" style="width:200px" placeholder="状态">
             <Option v-for="item in statusList" :value="item.value" :key="item.value">{{ item.label }}</Option>
           </Select>
         </FormItem>
-        <FormItem>
-        <FormItem prop="appointmentTime">
-            <DatePicker type="date" placeholder="预约时间" v-model="formInline.appointmentTime"></DatePicker>
+        <FormItem prop="winningTime">
+            <DatePicker type="date" placeholder="中签时间" v-model="formInline.winningTime"></DatePicker>
         </FormItem>
+        <FormItem prop="isWin">
+            <Checkbox v-model="formInline.isWin" label="中签">中签</Checkbox>
         </FormItem>
         <FormItem>
           <Button type="primary" @click="getTableData()">搜索</Button>
@@ -52,7 +46,7 @@
         <Button @click="handleSelectAll(true)">全选</Button>
         <Button @click="handleSelectAll(false)">取消全选</Button>
       </div>
-      <Table ref="selection" :columns="columns" :data="data" :highlight-row="true">
+      <Table ref="selection" :columns="columns" :data="data" :highlight-row="true" :scroll="{x: 1500}">
         <template #action="{ row, index }">
           <Button type="primary" size="small" style="margin-right: 5px" @click="queryOrder(row, true)">查询订单</Button>
           <Button type="success" size="small" style="margin-right: 5px" @click="queryOrderExpress(row, true)">查询物流</Button>
@@ -107,8 +101,7 @@ export default {
           width: 60,
           align: 'center'
         },
-        { title: 'id', key: 'id', width: 80 },
-        { title: '手机号', key: 'phone' },
+        { title: '手机号', key: 'phone', width: 110 },
         {
           title: '创建时间',
           key: 'createdAt',
@@ -118,13 +111,6 @@ export default {
           }
         },
         { title: '名称', key: 'realName' },
-        {
-          title: '是否绑定顺丰',
-          key: 'isSf',
-          render: (h, params) => {
-            return <span>{ params.row.isSf === 0 ? '未绑定' : '已绑定' }</span>
-          }
-        },
         {
           title: '平台',
           key: 'channelId',
@@ -172,10 +158,21 @@ export default {
           }
         },
         {
-          title: '预约时间',
-          key: 'appointmentTime'
+          title: '中签时间',
+          key: 'winningTime',
+          width: 100
         },
         { title: '备注', key: 'remark' },
+        {
+          title: '是否中签',
+          render: (h, params) => {
+            let isWin = '未中签'
+            if (params.row.winningTime !== null && params.row.winningTime !== '') {
+              isWin = '已中签'
+            }
+            return <span>{ isWin }</span>
+          }
+        },
         {
           title: '订单消息',
           key: 'orderDetail',
@@ -198,7 +195,7 @@ export default {
             let text = '无物流消息'
             if (params.row.logisticsDetails != null) {
               let retJson = JSON.parse(params.row.logisticsDetails)
-              if (retJson.data.length > 0) {
+              if (retJson.data && retJson.data.length > 0) {
                 text = retJson.data[0][0].deliveryStatusName
               } else {
                 text = '待发货'
@@ -217,7 +214,8 @@ export default {
         phone: '',
         realName: '',
         currentStatus: '',
-        appointmentTime: ''
+        winningTime: '',
+        isWin: false
       },
       statusList: [
         {
@@ -227,10 +225,6 @@ export default {
         {
           value: '0',
           label: '正常'
-        },
-        {
-          value: '1',
-          label: '中签'
         },
         {
           value: '-1',
@@ -275,12 +269,15 @@ export default {
       if (this.formInline.currentStatus && this.formInline.currentStatus !== '') {
         searchStr += 'status=' + this.formInline.currentStatus + ';'
       }
-      if (this.formInline.appointmentTime && this.formInline.appointmentTime !== '') {
+      if (this.formInline.isWin) {
+        searchStr += 'isWin=true'
+      }
+      if (this.formInline.winningTime && this.formInline.winningTime !== '') {
         let formatter = new Intl.DateTimeFormat('zh-cn', { year: 'numeric', month: '2-digit', day: '2-digit' })
-        let formattedDate = formatter.format(new Date(this.formInline.appointmentTime))
-        let appointmentTime = formattedDate.replaceAll('/', '-')
-        searchStr += 'appointment_time=' + appointmentTime + ';'
-        console.log(appointmentTime)
+        let formattedDate = formatter.format(new Date(this.formInline.winningTime))
+        let winningTime = formattedDate.replaceAll('/', '-')
+        searchStr += 'winning_time=' + winningTime + ';'
+        console.log(winningTime)
       }
       queryAccountPage(this.currentPage, this.pageSize, searchStr).then(res => {
         this.data = res.data.data.records
@@ -300,12 +297,16 @@ export default {
           return
         }
         let retJson = JSON.parse(res.data.data)
-        if (retJson.code !== '10000') {
+        const index = self.data.findIndex(d => d.id === parseInt(res.data.id))
+        self.data[index].orderDetail = res.data.data
+        if (retJson.code === '401') {
+          self.data[index].status = -1
+          this.$Message.warning(self.data[index].phone + 'token失效请重新登录')
+          return
+        } else if (retJson.code !== '10000') {
           this.$Message.warning(retJson.message)
           return
         }
-        const index = self.data.findIndex(d => d.id === parseInt(res.data.id))
-        self.data[index].orderDetail = res.data.data
         if (show) {
           this.dialog.isShowDialog = true
           this.dialog.title = '订单详情'
@@ -421,16 +422,26 @@ export default {
         return
       }
       let self = this
+      self.$Spin.show()
       reLogin(item.id).then(res => {
         if (res.data.code === 200) {
-          let returnJson = JSON.parse(res.data.data.body)
-          this.$Message.info(returnJson['msg'])
+          let returnJson = JSON.parse(res.data.data.data)
           const index = self.data.findIndex(d => d.id === parseInt(res.data.id))
-          self.data[index].status = 0
+          if (returnJson['status'] === 200) {
+            this.$Message.info(self.data[index].phone + returnJson['msg'])
+            self.data[index].status = 0
+          } else {
+            this.$Message.error(self.data[index].phone + '更新失败')
+          }
         } else {
           this.$Message.error('发生错误')
         }
         console.log(res)
+        self.$Spin.hide()
+      }).catch((err) => {
+        console.log(err)
+        this.$Message.warning('查询失败')
+        self.$Spin.hide()
       })
     },
     cancelDialog () {
@@ -460,5 +471,12 @@ export default {
 </script>
 
 <style>
+.ivu-table-cell {
+  white-space: normal !important;
+  word-break: break-all !important;
+}
+.ivu-table-wrapper  {
+  min-width: 1500px;
+}
 
 </style>
