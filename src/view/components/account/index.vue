@@ -50,7 +50,7 @@
         <template #action="{ row, index }">
           <Button type="primary" size="small" style="margin-right: 5px" @click="queryOrder(row, true)">查询订单</Button>
           <Button type="success" size="small" style="margin-right: 5px" @click="queryOrderExpress(row, true)">查询物流</Button>
-          <Button type="primary" size="small" style="margin-right: 5px" @click="showExpress(row.logisticsDetails)">显示物流</Button>
+          <Button type="primary" size="small" style="margin-right: 5px" @click="queryAccountBookSum(row)">查询积分</Button>
           <Button type="success" size="small" style="margin-right: 5px" @click="reLoginMethod(row)" :disabled="requesting">重新登录</Button>
         </template>
       </Table>
@@ -79,12 +79,16 @@
           <p>更新时间：{{ dialog.express.processTime }}</p>
           <p>最新流程：{{ dialog.express.processDesc }}</p>
         </div>
+        <div v-show="dialog.showAccountBookSum">
+          <p>积分数量：{{ dialog.account.points }}</p>
+          <p>购酒卷数量：{{ dialog.account.ticketCount }}</p>
+        </div>
       </div>
     </Modal>
   </div>
 </template>
 <script>
-import { queryAccountPage, queryOrderById, queryOrderExpressById, reLogin } from '@/api/data'
+import { queryAccountBookSum, queryAccountPage, queryOrderById, queryOrderExpressById, reLogin } from '@/api/data'
 import { Table, Page } from 'iview'
 
 export default {
@@ -237,6 +241,7 @@ export default {
         dialogContent: '',
         showOrder: false,
         showExpress: false,
+        showAccountBookSum: false,
         order: {
           total: '',
           orderId: '',
@@ -253,6 +258,10 @@ export default {
           processDesc: '',
           originalLogisticsStatusDesc: '',
           processTime: ''
+        },
+        account: {
+          ticketCount: '',
+          points: ''
         }
       },
       requesting: false
@@ -313,7 +322,20 @@ export default {
           if (retJson.data.total !== 0) {
             item.status = 1
             this.dialog.showOrder = true
-            let list = retJson.data.list[0]
+            let i = 0
+            let list = retJson.data.list[i]
+            while (true) {
+              if (list.orderStatusName !== '系统关闭') {
+                break
+              }
+              if (i >= retJson.data.list.length) {
+                item.status = 0
+                this.dialog.dialogContent = '未查询到订单'
+                return
+              }
+              list = retJson.data.list[i++]
+
+            }
             this.dialog.dialogContent = ''
             this.dialog.order.total = retJson.data.total
             this.dialog.order.orderId = list.orderId
@@ -396,7 +418,6 @@ export default {
       this.dialog.express.processTime = list.logisticsAttr.processTime
     },
     queryOrderExpress (item, show = false) {
-      console.log(item)
       let data = item
       let self = this
       if (data.status === 1 && data.orderDetail != null) {
@@ -408,6 +429,24 @@ export default {
           } else {
             this.$Message.success('查询物流成功，已显示状态')
           }
+        }).catch((err) => {
+          console.log(err)
+          this.$Message.warning('查询失败')
+        })
+      } else {
+        this.$Message.warning('手机号: ' + data.phone + ' 请先查询订单数据')
+      }
+    },
+    queryAccountBookSum (item) {
+      if (item.orderDetail != null) {
+        queryAccountBookSum(item.id).then(res => {
+          console.log(res)
+          this.dialog.isShowDialog = true
+          this.dialog.title = '积分详情'
+          let retJson = res.data.data
+          this.dialog.showAccountBookSum = true
+          this.dialog.account.points = retJson.points
+          this.dialog.account.ticketCount = retJson.ticketCount
         }).catch((err) => {
           console.log(err)
           this.$Message.warning('查询失败')
@@ -449,6 +488,7 @@ export default {
       this.dialog.dialogContent = ''
       this.dialog.showExpress = false
       this.dialog.showOrder = false
+      this.dialog.showAccountBookSum = false
       this.dialog.order.total = ''
       this.dialog.order.orderId = ''
       this.dialog.order.statusName = ''
@@ -462,6 +502,8 @@ export default {
       this.dialog.express.processDesc = ''
       this.dialog.express.originalLogisticsStatusDesc = ''
       this.dialog.express.processTime = ''
+      this.dialog.account.ticketCount = ''
+      this.dialog.account.points = ''
     }
   },
   mounted () {

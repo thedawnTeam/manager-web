@@ -22,6 +22,13 @@ export const queryOrderExpressById = (id) => {
   })
 }
 
+export const queryAccountBookSum = (id) => {
+  return axios.request({
+    url: '/queryAccountBookSum?id=' + id,
+    method: 'get'
+  })
+}
+
 export const queryLuckyPerson = (pageNum, pageSize, searchStr) => {
   console.log('搜索字符串=' + searchStr)
   return axios.request({

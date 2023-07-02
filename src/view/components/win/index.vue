@@ -29,7 +29,6 @@
 <script>
 import { queryAccountPage, queryExportAccount } from '@/api/data'
 import { Table, Page } from 'iview'
-import axios from '@/libs/api.request'
 
 export default {
   name: 'win',
@@ -170,22 +169,6 @@ export default {
         winningTime = formattedDate.replaceAll('/', '-')
         console.log(winningTime)
       }
-
-      axios.request({
-        url: '/queryExportAccount?winningTime=', // 后台API的URL
-        method: 'GET',
-        responseType: 'blob'
-      }).then(response => {
-        const url = window.URL.createObjectURL(new Blob([response.data],
-          { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }))
-        const link = document.createElement('a')
-        link.href = url
-        link.setAttribute('download', 'filename.xlsx') // 下载的文件名
-        document.body.appendChild(link)
-        link.click()
-      }).catch(error => {
-        console.error(error)
-      })
 
       queryExportAccount(winningTime).then(res => {
         console.log(res)
