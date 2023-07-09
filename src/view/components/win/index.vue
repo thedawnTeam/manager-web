@@ -15,6 +15,9 @@
         <FormItem>
           <Button type="primary" @click="handleExport">导出数据</Button>
         </FormItem>
+        <FormItem>
+          <Button type="primary" @click="reLoginAll()">更新所有token</Button>
+        </FormItem>
       </Form>
       <div style="margin-bottom: 8px">
         <Button @click="handleSelectAll(true)">全选</Button>
@@ -27,7 +30,7 @@
   </div>
 </template>
 <script>
-import { queryAccountPage, queryExportAccount } from '@/api/data'
+import { queryAccountPage, queryExportAccount, reLoginAll } from '@/api/data'
 import { Table, Page } from 'iview'
 
 export default {
@@ -79,6 +82,14 @@ export default {
         {
           title: '中签时间',
           key: 'winningTime'
+        },
+        {
+          title: '更新时间',
+          key: 'updatedAt',
+          width: 150,
+          render: function (h, params) {
+            return <span>{ new Date(params.row.updatedAt).toLocaleDateString() + ' ' + new Date(params.row.updatedAt).toLocaleTimeString() }</span>
+          }
         },
         {
           title: '订单号',
@@ -158,6 +169,11 @@ export default {
       this.currentPage = current
       this.getTableData()
     },
+    reLoginAll () {
+      reLoginAll().then(res => {
+        this.$Message.success(res.data.data)
+      })
+    },
     handleSelectAll (status) {
       this.$refs.selection.selectAll(status)
     },
@@ -197,7 +213,6 @@ export default {
     },
     downloadCSV (csvContent, filename) {
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
-
       if (navigator.msSaveBlob) {
         // For IE 10+
         navigator.msSaveBlob(blob, filename)
@@ -247,6 +262,6 @@ export default {
   word-break: break-all !important;
 }
 .content-wrapper  {
-  min-width: 1920px;
+  min-width: 1500px;
 }
 </style>

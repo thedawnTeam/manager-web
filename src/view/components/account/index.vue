@@ -64,12 +64,17 @@
       <div>
         <h3>{{ dialog.dialogContent}}</h3>
         <div v-show="dialog.showOrder">
-          <p>订单数量：{{ dialog.order.total }}</p>
-          <p>订单ID：{{ dialog.order.orderId }}</p>
-          <p>当前状态：{{ dialog.order.statusName }}</p>
-          <p>产品名称：{{ dialog.order.sellerName }}</p>
-          <p>收货人：{{ dialog.order.receiverName }}</p>
-          <p>收货手机：{{ dialog.order.receiverPhone }}</p>
+          <p>订单数量：{{ dialog.orders.length }}</p>
+          <br>
+          <div v-for="order in dialog.orders" :key="order.orderId">
+            <p>订单ID：{{ order.orderId }}</p>
+            <p>当前状态：{{ order.orderStatusName }}</p>
+            <p>产品名称：{{ order.sellerName }}</p>
+            <p>收货人：{{ order.receiverName }}</p>
+            <p>收货手机：{{ order.receiverPhone }}</p>
+            <p>创建时间：{{ order.createTime }}</p>
+            <br/>
+          </div>
         </div>
         <div v-show="dialog.showExpress">
           <p>订单ID：{{ dialog.express.primaryOrderId }}</p>
@@ -242,14 +247,7 @@ export default {
         showOrder: false,
         showExpress: false,
         showAccountBookSum: false,
-        order: {
-          total: '',
-          orderId: '',
-          statusName: '',
-          sellerName: '',
-          receiverName: '',
-          receiverPhone: ''
-        },
+        orders: [],
         express: {
           deliveryCompany: '',
           primaryOrderId: '',
@@ -298,8 +296,10 @@ export default {
       this.getTableData()
     },
     queryOrder (item, show = false) {
+      this.$Spin.show()
       let self = this
       queryOrderById(item.id).then(res => {
+        this.$Spin.hide()
         console.log(res)
         if (res.data.code !== 200) {
           this.$Message.warning(res.data.data)
@@ -307,6 +307,7 @@ export default {
         }
         let retJson = JSON.parse(res.data.data)
         const index = self.data.findIndex(d => d.id === parseInt(res.data.id))
+        console.log(self.data[index].orderDetail)
         self.data[index].orderDetail = res.data.data
         if (retJson.code === '401') {
           self.data[index].status = -1
@@ -323,26 +324,15 @@ export default {
             item.status = 1
             this.dialog.showOrder = true
             let i = 0
-            let list = retJson.data.list[i]
-            while (true) {
-              if (list.orderStatusName !== '系统关闭') {
-                break
+            while (i < retJson.data.list.length) {
+              if (retJson.data.list[i].orderStatusName === '系统关闭') {
+                i += 1
+                continue
               }
-              if (i >= retJson.data.list.length) {
-                item.status = 0
-                this.dialog.dialogContent = '未查询到订单'
-                return
-              }
-              list = retJson.data.list[i++]
-
+              this.dialog.orders.push(retJson.data.list[i])
+              i += 1
             }
             this.dialog.dialogContent = ''
-            this.dialog.order.total = retJson.data.total
-            this.dialog.order.orderId = list.orderId
-            this.dialog.order.statusName = list.orderStatusName
-            this.dialog.order.sellerName = list.sellerName
-            this.dialog.order.receiverName = list.receiverName
-            this.dialog.order.receiverPhone = list.receiverPhone
           } else {
             item.status = 0
             this.dialog.dialogContent = '未查询到订单'
@@ -351,6 +341,7 @@ export default {
           this.$Message.success(item.phone + '查询成功')
         }
       }).catch((err) => {
+        this.$Spin.hide()
         console.log(err)
         this.$Message.warning('查询失败')
       })
@@ -375,11 +366,6 @@ export default {
       }
     },
     reLoginBatch () {
-      if (this.requesting) {
-        return
-      }
-      this.requesting = true
-      console.log(this.requesting)
       let selectItems = this.$refs.selection.getSelection()
       if (selectItems.length <= 0) {
         this.$Message.warning('请先选中需要查询的账号')
@@ -397,7 +383,7 @@ export default {
       this.$refs.selection.selectAll(status)
     },
     showExpress (data) {
-      if (data == null) {
+      if (data == null || data.indexOf('订单为空') != -1) {
         this.$Message.warning('无物流消息')
         return
       }
@@ -420,7 +406,7 @@ export default {
     queryOrderExpress (item, show = false) {
       let data = item
       let self = this
-      if (data.status === 1 && data.orderDetail != null) {
+      if (data.orderDetail != null) {
         queryOrderExpressById(data.id).then(res => {
           const index = self.data.findIndex(d => d.id === parseInt(res.data.id))
           self.data[index].logisticsDetails = res.data.data
@@ -484,17 +470,12 @@ export default {
       })
     },
     cancelDialog () {
+      this.dialog.orders = []
       this.dialog.isShowDialog = false
       this.dialog.dialogContent = ''
       this.dialog.showExpress = false
       this.dialog.showOrder = false
       this.dialog.showAccountBookSum = false
-      this.dialog.order.total = ''
-      this.dialog.order.orderId = ''
-      this.dialog.order.statusName = ''
-      this.dialog.order.sellerName = ''
-      this.dialog.order.receiverName = ''
-      this.dialog.order.receiverPhone = ''
       this.dialog.express.deliveryCompany = ''
       this.dialog.express.primaryOrderId = ''
       this.dialog.express.deliveryStatusName = ''

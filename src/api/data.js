@@ -53,6 +53,13 @@ export const reLogin = (id) => {
   })
 }
 
+export const reLoginAll = (id) => {
+  return axios.request({
+    url: '/reLoginAll',
+    method: 'get'
+  })
+}
+
 export const errorReq = () => {
   return axios.request({
     url: 'error_url',
