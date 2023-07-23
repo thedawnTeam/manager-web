@@ -23,15 +23,23 @@
             <Option v-for="item in statusList" :value="item.value" :key="item.value">{{ item.label }}</Option>
           </Select>
         </FormItem>
+        <FormItem prop="remark">
+          <Input type="text" v-model="formInline.remark" placeholder="备注">
+            <template #prepend>
+              <Icon type="md-person" />
+            </template>
+          </Input>
+        </FormItem>
         <FormItem prop="winningTime">
-            <DatePicker type="date" placeholder="中签时间" v-model="formInline.winningTime"></DatePicker>
+            <DatePicker type="daterange" placeholder="中签时间" v-model="formInline.winningTime"></DatePicker>
         </FormItem>
         <FormItem prop="isWin">
-            <Checkbox v-model="formInline.isWin" label="中签">中签</Checkbox>
+            <Checkbox v-model="formInline.isWin" label="中签">显示所有中签</Checkbox>
         </FormItem>
         <FormItem>
-          <Button type="primary" @click="getTableData()">搜索</Button>
+          <Button type="primary" @click="search()">搜索</Button>
         </FormItem>
+        <br/>
         <FormItem>
           <Button type="primary" @click="queryOrderBatch()">批量查询订单</Button>
         </FormItem>
@@ -41,6 +49,9 @@
         <FormItem>
           <Button type="primary" @click="reLoginBatch()">批量重新登陆</Button>
         </FormItem>
+        <FormItem>
+          <Button type="primary" @click="finishOrderBatch()">批量确定收货</Button>
+        </FormItem>
       </Form>
       <div style="margin-bottom: 8px">
         <Button @click="handleSelectAll(true)">全选</Button>
@@ -48,10 +59,11 @@
       </div>
       <Table ref="selection" :columns="columns" :data="data" :highlight-row="true" :scroll="{x: 1500}">
         <template #action="{ row, index }">
-          <Button type="primary" size="small" style="margin-right: 5px" @click="queryOrder(row, true)">查询订单</Button>
-          <Button type="success" size="small" style="margin-right: 5px" @click="queryOrderExpress(row, true)">查询物流</Button>
-          <Button type="primary" size="small" style="margin-right: 5px" @click="queryAccountBookSum(row)">查询积分</Button>
-          <Button type="success" size="small" style="margin-right: 5px" @click="reLoginMethod(row)" :disabled="requesting">重新登录</Button>
+          <Button type="primary" size="small" style="margin-right: 3px" @click="queryOrder(row, true)">查询订单</Button>
+          <Button type="success" size="small" style="margin-right: 3px" @click="queryOrderExpress(row, true)">查询物流</Button>
+          <Button type="primary" size="small" style="margin-right: 3px" @click="queryAccountBookSum(row)">查询积分</Button>
+          <Button type="success" size="small" style="margin-right: 3px" @click="reLoginMethod(row)" :disabled="requesting">重新登录</Button>
+          <Button type="primary" size="small" style="margin-right: 3px" @click="finishOrderBtn(row)">确定收货</Button>
         </template>
       </Table>
       <Page :total="total" :page-size="pageSize" :current="currentPage" @on-change="pageSizeChangeHandler" show-elevator show-total/>
@@ -60,7 +72,8 @@
     <Modal
       v-model="dialog.isShowDialog"
       :title="dialog.title"
-      @on-cancel="cancelDialog">
+      @on-cancel="cancelDialog"
+      @on-ok="cancelDialog">
       <div>
         <h3>{{ dialog.dialogContent}}</h3>
         <div v-show="dialog.showOrder">
@@ -93,7 +106,7 @@
   </div>
 </template>
 <script>
-import { queryAccountBookSum, queryAccountPage, queryOrderById, queryOrderExpressById, reLogin } from '@/api/data'
+import { queryAccountBookSum, queryAccountPage, queryOrderById, queryOrderExpressById, reLogin, finishOrder } from '@/api/data'
 import { Table, Page } from 'iview'
 
 export default {
@@ -168,10 +181,9 @@ export default {
         },
         {
           title: '中签时间',
-          key: 'winningTime',
-          width: 100
+          key: 'winningTime'
         },
-        { title: '备注', key: 'remark' },
+        { title: '备注', key: 'remark', width: 80 },
         {
           title: '是否中签',
           render: (h, params) => {
@@ -187,13 +199,7 @@ export default {
           key: 'orderDetail',
           width: 150,
           render: (h, params) => {
-            let text = '无订单消息'
-            if (params.row.orderDetail != null) {
-              let retJson = JSON.parse(params.row.orderDetail)
-              if (retJson.code === '10000' && retJson.data.list.length > 0) {
-                text = retJson.data.list[0].orderId
-              }
-            }
+            let text = this.getLastOrderStatus(params.row.orderDetail)
             return <span>{text}</span>
           }
         },
@@ -213,17 +219,18 @@ export default {
             return <span>{text}</span>
           }
         },
-        { title: '操作', slot: 'action', width: 350 }
+        { title: '操作', slot: 'action', width: 380 }
       ],
       data: [],
       total: 0,
       currentPage: 1,
-      pageSize: 30,
+      pageSize: 50,
       formInline: {
         phone: '',
         realName: '',
         currentStatus: '',
         winningTime: '',
+        remark: '',
         isWin: false
       },
       statusList: [
@@ -277,25 +284,60 @@ export default {
         searchStr += 'status=' + this.formInline.currentStatus + ';'
       }
       if (this.formInline.isWin) {
-        searchStr += 'isWin=true'
+        searchStr += 'isWin=true;'
+      }
+      if (this.formInline.remark) {
+        searchStr += 'remark=' + this.formInline.remark + ';'
       }
       if (this.formInline.winningTime && this.formInline.winningTime !== '') {
-        let formatter = new Intl.DateTimeFormat('zh-cn', { year: 'numeric', month: '2-digit', day: '2-digit' })
-        let formattedDate = formatter.format(new Date(this.formInline.winningTime))
-        let winningTime = formattedDate.replaceAll('/', '-')
-        searchStr += 'winning_time=' + winningTime + ';'
-        console.log(winningTime)
+        if (this.formInline.winningTime !== '') {
+          let start_time = this.formInline.winningTime[0]
+          let end_time = this.formInline.winningTime[1]
+          if (start_time !== '' && end_time !== '') {
+            let formatter = new Intl.DateTimeFormat('zh-cn', { year: 'numeric', month: '2-digit', day: '2-digit' })
+            let formattedDate = formatter.format(new Date(start_time))
+            start_time = formattedDate.replaceAll('/', '-')
+            formattedDate = formatter.format(new Date(end_time))
+            end_time = formattedDate.replaceAll('/', '-')
+            searchStr += 'winning_time_after=' + start_time + ';winning_time_before=' + end_time
+          }
+        }
       }
       queryAccountPage(this.currentPage, this.pageSize, searchStr).then(res => {
         this.data = res.data.data.records
         this.total = res.data.data.total
       })
     },
+    search () {
+      this.currentPage = 1
+      this.getTableData()
+    },
     pageSizeChangeHandler (current) {
       this.currentPage = current
       this.getTableData()
     },
+    getLastOrderStatus (orderDetail) {
+      let text = '无订单消息'
+      if (orderDetail != null) {
+        let retJson = JSON.parse(orderDetail)
+        if (retJson.code === '10000' && retJson.data.list.length > 0) {
+          let i = 0
+          let lastOrder = retJson.data.list[retJson.data.list.length - 1]
+          while (i < retJson.data.list.length) {
+            lastOrder = retJson.data.list[i]
+            i += 1
+            if (lastOrder.orderStatusName === '系统关闭' || lastOrder === '买家取消') {
+              continue
+            }
+            break
+          }
+          text = lastOrder.orderStatusName
+        }
+      }
+      return text
+    },
     queryOrder (item, show = false) {
+      this.cancelDialog()
       this.$Spin.show()
       let self = this
       queryOrderById(item.id).then(res => {
@@ -347,6 +389,7 @@ export default {
       })
     },
     queryOrderBatch () {
+      this.cancelDialog()
       let selectItems = this.$refs.selection.getSelection()
       if (selectItems.length <= 0) {
         this.$Message.warning('请先选中需要查询的账号')
@@ -383,7 +426,7 @@ export default {
       this.$refs.selection.selectAll(status)
     },
     showExpress (data) {
-      if (data == null || data.indexOf('订单为空') != -1) {
+      if (data == null || data.indexOf('订单为空') !== -1) {
         this.$Message.warning('无物流消息')
         return
       }
@@ -424,6 +467,7 @@ export default {
       }
     },
     queryAccountBookSum (item) {
+      this.cancelDialog()
       if (item.orderDetail != null) {
         queryAccountBookSum(item.id).then(res => {
           console.log(res)
@@ -470,12 +514,12 @@ export default {
       })
     },
     cancelDialog () {
-      this.dialog.orders = []
-      this.dialog.isShowDialog = false
       this.dialog.dialogContent = ''
+      this.dialog.isShowDialog = false
       this.dialog.showExpress = false
       this.dialog.showOrder = false
       this.dialog.showAccountBookSum = false
+      this.dialog.orders = []
       this.dialog.express.deliveryCompany = ''
       this.dialog.express.primaryOrderId = ''
       this.dialog.express.deliveryStatusName = ''
@@ -485,6 +529,41 @@ export default {
       this.dialog.express.processTime = ''
       this.dialog.account.ticketCount = ''
       this.dialog.account.points = ''
+    },
+    finishOrderBtn (item) {
+      let orderStatus = this.getLastOrderStatus(item.orderDetail)
+      if (orderStatus === '已签收' || orderStatus === '无订单消息') {
+        this.$Message.info('当前订单状态无需签收')
+        return
+      }
+      this.$Spin.show()
+      finishOrder(item.id).then(res => {
+        this.$Spin.hide()
+        if (res.data.code === 200) {
+          this.$Message.info('签收成功，正在查询订单状态')
+          this.queryOrder(item)
+        } else {
+          this.$Message.info(res.data.data)
+        }
+        console.log(res)
+      }).catch((err) => {
+        console.log(err)
+        this.$Message.warning('发生异常')
+        this.$Spin.hide()
+      })
+    },
+    finishOrderBatch () {
+      let selectItems = this.$refs.selection.getSelection()
+      if (selectItems.length <= 0) {
+        this.$Message.warning('请先选中需要查询的账号')
+      }
+      try {
+        for (const index in selectItems) {
+          this.finishOrderBtn(selectItems[index])
+        }
+      } catch (e) {
+        console.log(e)
+      }
     }
   },
   mounted () {
@@ -499,7 +578,7 @@ export default {
   word-break: break-all !important;
 }
 .ivu-table-wrapper  {
-  min-width: 1500px;
+  min-width: 1400px;
 }
 
 </style>

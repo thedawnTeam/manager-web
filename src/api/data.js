@@ -29,10 +29,9 @@ export const queryAccountBookSum = (id) => {
   })
 }
 
-export const queryLuckyPerson = (pageNum, pageSize, searchStr) => {
-  console.log('搜索字符串=' + searchStr)
+export const finishOrder = (id) => {
   return axios.request({
-    url: '/queryLuckyPerson?pageNum=' + pageNum + '&pageSize=' + pageSize + '&searchStr=' + searchStr,
+    url: '/finishOrder?id=' + id,
     method: 'get'
   })
 }
