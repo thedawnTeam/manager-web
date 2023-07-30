@@ -349,8 +349,6 @@ export default {
         }
         let retJson = JSON.parse(res.data.data)
         const index = self.data.findIndex(d => d.id === parseInt(res.data.id))
-        console.log(self.data[index].orderDetail)
-        self.data[index].orderDetail = res.data.data
         if (retJson.code === '401') {
           self.data[index].status = -1
           this.$Message.warning(self.data[index].phone + 'token失效请重新登录')
@@ -359,6 +357,8 @@ export default {
           this.$Message.warning(retJson.message)
           return
         }
+        self.data[index].orderDetail = res.data.data
+        console.log(self.data[index].orderDetail)
         if (show) {
           this.dialog.isShowDialog = true
           this.dialog.title = '订单详情'
@@ -532,8 +532,8 @@ export default {
     },
     finishOrderBtn (item) {
       let orderStatus = this.getLastOrderStatus(item.orderDetail)
-      if (orderStatus === '已签收' || orderStatus === '无订单消息') {
-        this.$Message.info('当前订单状态无需签收')
+      if (orderStatus === '已签收' || orderStatus === '无订单消息' || orderStatus === '系统确认收货') {
+        this.$Message.info(item.phone + '当前订单状态无需签收')
         return
       }
       this.$Spin.show()
